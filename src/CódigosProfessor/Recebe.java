@@ -2,8 +2,10 @@ package CódigosProfessor;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.net.SocketException;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -13,6 +15,8 @@ public class Recebe implements Runnable {
     List<Individuos> membros;
     MulticastSocket s;
     String apelido;
+    boolean cthread;
+    DatagramSocket SocketUDP;
 
     public String getApelido() {
         return apelido;
@@ -22,10 +26,13 @@ public class Recebe implements Runnable {
         this.apelido = apelido;
     }
 
-    public Recebe(List<Individuos> m, MulticastSocket cc, String ape) {
+    public Recebe(List<Individuos> m, MulticastSocket cc, String ape, boolean bol, DatagramSocket udpSocket) {
         this.membros = m;
         this.s = cc;
         this.apelido = ape;
+        this.cthread = bol;
+        this.SocketUDP = udpSocket;
+        
     }
 
     public List<Individuos> getMembros() {
@@ -59,8 +66,7 @@ public class Recebe implements Runnable {
     @Override
     public void run() {
         byte[] buffer = new byte[1000];//aguarda o recebimento de msgs de outros peers
-        while (true) {
-
+        while (this.cthread) {
             DatagramPacket messageIn = new DatagramPacket(buffer, buffer.length);
             try {
                 s.receive(messageIn);
@@ -81,11 +87,23 @@ public class Recebe implements Runnable {
                 String x = "JOINACK [" + this.getApelido() + "]";
                 byte[] m = x.getBytes();
                 DatagramPacket joinack = new DatagramPacket(m, m.length, ipzin, 6799);
+                try {
+                    this.SocketUDP = new DatagramSocket();
+                    this.SocketUDP.send(joinack);
+                    this.SocketUDP = null;
+                } catch (SocketException ex) {
+                    Logger.getLogger(Recebe.class.getName()).log(Level.SEVERE, null, ex);
+                } catch (IOException ex) {
+                    Logger.getLogger(Recebe.class.getName()).log(Level.SEVERE, null, ex);
+                }
+                
                 Individuos novo = new Individuos();
                 novo.setApelido(ape[0]);
                 novo.setIp(messageIn.getAddress().toString());
                 this.addMembro(novo);
+                m = new byte[1000];
                 System.out.println("nome: "+novo.getApelido()+" ip: "+novo.getIp());
+                
             } else if (pg.equals("LEAVE")) {
                 this.removeMembro(b[1]);
                 System.out.println("Membro ["+ape[0]+"] Removido!");

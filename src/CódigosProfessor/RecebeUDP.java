@@ -17,6 +17,7 @@ class RecebeUDP implements Runnable {
     private String meuapelido;
     private File[] myfiles;
     private InetAddress meuip;
+    boolean cthread;
 
     public InetAddress getMeuip() {
         return meuip;
@@ -42,12 +43,13 @@ class RecebeUDP implements Runnable {
         this.diretorio = diretorio;
     }
 
-    public RecebeUDP(List<Individuos> m, String ape, String direc, InetAddress mip) {
+    public RecebeUDP(List<Individuos> m, String ape, String direc, InetAddress mip, boolean controle) {
         this.myfiles = null;
         this.membros = m;
         this.meuapelido = ape;
         this.diretorio = direc;
         this.meuip = mip;
+        this.cthread = controle;
     }
 
     public List<Individuos> getMembros() {
@@ -81,23 +83,25 @@ class RecebeUDP implements Runnable {
     public void run() {
         try {
             DatagramSocket aSocket = new DatagramSocket(6799);
-            while (true) {
+            while (cthread) {
                 byte[] buffer = new byte[1000];
                 DatagramPacket request = new DatagramPacket(buffer, buffer.length);
+
                 aSocket.receive(request);
 
                 String a = new String(request.getData());
                 String[] b = a.split("\\[");
-                b[0] = b[0].trim();
 
-                if (b[0].equals("JOINACK")) {
+                System.out.println(a);
+                
+                if (b[0].equals("JOINACK ")) {
                     String apelido = b[1].replace("\\]", "");
                     apelido = apelido.trim();
                     String ip = request.getAddress().toString();
                     Individuos novo = new Individuos(apelido, ip);
                     this.addMembros(novo);
 
-                } else if (b[0].equals("LISTFILES")) {
+                } else if (b[0].equals("LISTFILES ")) {
                     //resoponder FILES [arq1, arq2, arqN] 
                     this.listFilesForFolder();//a cada LISTFILES, a lista é atualizada
 
@@ -105,17 +109,17 @@ class RecebeUDP implements Runnable {
 
                     String resposta = new String();
                     for (File e : this.getMyfiles()) {
-                        resposta = resposta.concat(e.getName()+" ");
+                        resposta = resposta.concat(e.getName() + ", ");
                     }
-
-                    String msgresposta = "FILES [" + resposta + "]";
+                    String respostaNew = resposta.substring(0, resposta.length() - 2);
+                    String msgresposta = "FILES [" + respostaNew + "]";
                     byte[] m = msgresposta.getBytes();
-                    DatagramSocket skt = new DatagramSocket();
+                    //DatagramSocket skt = new DatagramSocket();
                     DatagramPacket resp = new DatagramPacket(m, m.length, ipretorno, 6799);
-                    skt.send(resp);
-                    skt.close();
+                    aSocket.send(resp);
+                    //skt.close();
 
-                } else if (b[0].equals("DOWNFILE")) {//DOWNFILE [apelido] filename 
+                } else if (b[0].equals("DOWNFILE ")) {//DOWNFILE [apelido] filename 
                     String[] j = b[1].split("\\]");
                     String arqname = j[1].trim();
 
@@ -123,8 +127,8 @@ class RecebeUDP implements Runnable {
                     int porta = 7321;
                     long sizearq = new File(this.getDiretorio() + arqname).length();
 
-                    String msgresposta = "DOWNINFO [" + arqname + "," + sizearq
-                            + "," + this.getMeuip() + "," + porta + "]";
+                    String msgresposta = "DOWNINFO [" + arqname + ", " + sizearq
+                            + ", " + this.getMeuip() + ", " + porta + "]";
                     byte[] m = msgresposta.getBytes();
                     DatagramSocket skt = new DatagramSocket();
                     DatagramPacket resp = new DatagramPacket(m, m.length, ipretorno, 6799);
@@ -134,7 +138,7 @@ class RecebeUDP implements Runnable {
                     Thread up = new Thread(new UploaderTCP(porta, InetAddress.getLocalHost(), j[1], sizearq, this.getDiretorio(), ipretorno));
                     up.start();
 
-                } else if (b[0].equals("DOWNINFO")) {//DOWNINFO[nomeArquivo,sizeArquivo,ip,porta]
+                } else if (b[0].equals("DOWNINFO ")) {//DOWNINFO[nomeArquivo,sizeArquivo,ip,porta]
                     String xc = b[1].replace("\\]", "");
                     xc = xc.trim();
 
@@ -152,11 +156,13 @@ class RecebeUDP implements Runnable {
 
                 buffer = new byte[1000];
             }
+            aSocket.close();
         } catch (SocketException ex) {
             Logger.getLogger(RecebeUDP.class.getName()).log(Level.SEVERE, null, ex);
         } catch (IOException ex) {
             Logger.getLogger(RecebeUDP.class.getName()).log(Level.SEVERE, null, ex);
         }
+        
     }
 
 }
